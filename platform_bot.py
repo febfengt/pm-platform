@@ -1,4 +1,4 @@
-"""PM 私信平台 - 优化精简版"""
+"""PM 私信平台 - 最终版"""
 import asyncio
 import datetime
 import json
@@ -18,7 +18,7 @@ from config import PLATFORM_BOT_TOKEN, PLATFORM_ADMIN_IDS, BASE_DIR, REGISTRY_PA
 
 
 # ==================== 持久化 ====================
-_data_lock = threading.Lock()
+_lock = threading.Lock()
 
 
 def _bot_data(bot_id, name):
@@ -36,22 +36,29 @@ def _bot_data(bot_id, name):
 def _save(bot_id, name, data):
     d = os.path.join(DATA_DIR, str(bot_id))
     os.makedirs(d, exist_ok=True)
-    with _data_lock:
-        json.dump(data, open(os.path.join(d, name + ".json"), "w"), ensure_ascii=False)
+    json.dump(data, open(os.path.join(d, name + ".json"), "w"), ensure_ascii=False)
 
 
-def is_verified(bot_id, uid): return str(uid) in _bot_data(bot_id, "verified")
+def is_verified(bot_id, uid):
+    return str(uid) in _bot_data(bot_id, "verified")
 
 
-def set_verified(bot_id, uid, v):
-    d = _bot_data(bot_id, "verified"); d[str(uid)] = v; _save(bot_id, "verified", d)
+def set_verified(bot_id, uid):
+    with _lock:
+        d = _bot_data(bot_id, "verified")
+        d[str(uid)] = True
+        _save(bot_id, "verified", d)
 
 
-def is_blocked(bot_id, uid): return _bot_data(bot_id, "blocked").get(str(uid), False)
+def is_blocked(bot_id, uid):
+    return _bot_data(bot_id, "blocked").get(str(uid), False)
 
 
-def set_blocked(bot_id, uid, b):
-    d = _bot_data(bot_id, "blocked"); d[str(uid)] = b; _save(bot_id, "blocked", d)
+def set_blocked(bot_id, uid, blocked):
+    with _lock:
+        d = _bot_data(bot_id, "blocked")
+        d[str(uid)] = blocked
+        _save(bot_id, "blocked", d)
 
 
 # ==================== 子Bot实例 ====================
@@ -59,6 +66,22 @@ _current_reply = {}
 _last_tap = {}
 _verify_times = {}
 _bot_registry = {}
+
+
+def _format_user_link(user):
+    """返回可点击的用户名HTML链接"""
+    if user and user.username:
+        return ('<a href="https://t.me/' + user.username + '">' + '@' + user.username + '</a>')
+    return "无"
+
+
+def _user_label(user):
+    return "@" + user.username if user.username else str(user.id)
+
+
+def _make_kb(uid):
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=_user_label(uid), callback_data="reply_" + str(uid.id))]])
 
 
 def _extract_uid(reply_msg):
@@ -76,15 +99,6 @@ def _extract_uid(reply_msg):
         except Exception:
             pass
     return None
-
-
-def _user_label(user):
-    return "@" + user.username if user.username else str(user.id)
-
-
-def _make_kb(uid):
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text=_user_label(uid), callback_data="reply_" + str(uid.id))]])
 
 
 async def _forward_to_admin(bot_id, bot, msg):
@@ -119,7 +133,7 @@ async def _reply_to_user(bot_id, bot, admin_chat, uid, msg):
         elif msg.sticker:
             await bot.send_sticker(uid, msg.sticker.file_id)
         elif msg.text:
-            await bot.send_message(uid, msg.text, parse_mode="HTML")
+            await bot.send_message(uid, msg.text)
         else:
             return False
         return True
@@ -138,13 +152,15 @@ async def _issue_verify(bot_id, bot, msg):
         parse_mode="HTML")
 
 
-async def _user_info(bot_id, bot, msg, uid):
+async def _user_info(bot_id, bot, chat_id, uid):
+    """返回用户信息文本"""
     try:
         user = await bot.get_chat(uid)
     except Exception:
         user = None
-    label = "<a href=\"https://t.me/" + user.username + "\">@" + user.username + "</a>" if user and user.username else "无"
-    await msg.answer("用户：" + label + "\nUID：" + str(uid) + "\n" + ("已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽"), parse_mode="HTML")
+    link = _format_user_link(user)
+    return "用户：" + link + "\nUID：" + str(uid) + "\n" + (
+        "已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽")
 
 
 async def _handle_admin_cmd(bot_id, bot, msg):
@@ -156,7 +172,6 @@ async def _handle_admin_cmd(bot_id, bot, msg):
         await msg.answer("🤖 你的私信Bot已就绪！\n\n发送 /help 查看命令列表。")
         return
 
-    # --- 屏蔽/解封 ---
     if text.startswith("/ban ") or text.startswith("/block "):
         set_blocked(bot_id, int(text.split()[1].strip()), True)
         await msg.answer("🚫 已屏蔽")
@@ -175,15 +190,13 @@ async def _handle_admin_cmd(bot_id, bot, msg):
             await msg.answer("✅ 已解除 " + str(cur_uid))
         else:
             await msg.answer("⚠️ 未锁定, 用 /unblock <UID>")
-    # --- 用户信息 ---
     elif text.startswith("/user "):
-        await _user_info(bot_id, bot, msg, int(text.split()[1].strip()))
+        await msg.answer(await _user_info(bot_id, bot, chat_id, int(text.split()[1].strip())), parse_mode="HTML")
     elif text == "/user":
         if cur_uid:
-            await _user_info(bot_id, bot, msg, cur_uid)
+            await msg.answer(await _user_info(bot_id, bot, chat_id, cur_uid), parse_mode="HTML")
         else:
             await msg.answer("⚠️ 未锁定, 用 /user <UID>")
-    # --- 锁定/解锁 ---
     elif text.startswith("/lock "):
         _current_reply.setdefault(bot_id, {})[chat_id] = int(text.split()[1].strip())
         await msg.answer("🔒 已锁定")
@@ -226,7 +239,7 @@ async def _handle_private(bot_id, bot, msg):
             txt = msg.text.strip()
             v = str(verify_hour); v2 = str(verify_hour).zfill(2)
             if txt in (v, v2) or v + "点" in txt or v2 + "点" in txt or v + ":00" in txt or v2 + ":00" in txt:
-                set_verified(bot_id, uid, True)
+                set_verified(bot_id, uid)
                 vt.pop(uid_str, None)
                 await msg.answer("✅ 验证通过！你可以开始发送私信了。")
                 return
@@ -259,8 +272,7 @@ async def _handle_callback(bot_id, bot, cb):
     if prev and prev[0] == uid and now - prev[1] < 3:
         taps.pop(chat_id, None)
         try:
-            label = "<a href=\"https://t.me/" + user.username + "\">@" + user.username + "</a>" if user.username else str(uid)
-            await cb.message.answer("用户：" + label + "\nUID：" + str(uid) + "\n" + ("已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽"), parse_mode="HTML")
+            await cb.message.answer(await _user_info(bot_id, bot, chat_id, uid), parse_mode="HTML")
         except Exception:
             pass
         return
@@ -292,11 +304,19 @@ def make_bot(bot_id, token, admins, name=""):
     }
     _current_reply[bot_id] = _current_reply.get(bot_id, {})
     _last_tap[bot_id] = _last_tap.get(bot_id, {})
+    _verify_times[bot_id] = _verify_times.get(bot_id, {})
     return _bot_registry[bot_id]
 
 
 # ==================== 平台Bot ====================
-_bot = Bot(token=PLATFORM_BOT_TOKEN) if PLATFORM_BOT_TOKEN else None
+def _make_bot(token):
+    """安全创建 Bot，无效 token 返回 None"""
+    try:
+        return Bot(token=token)
+    except Exception:
+        return None
+
+_bot = _make_bot(PLATFORM_BOT_TOKEN)
 _dp = Dispatcher()
 _registering = {}
 
@@ -320,6 +340,7 @@ async def on_platform_private(msg):
     text = msg.text or ""
     if text == "/start":
         await msg.answer("🤖 PM 私信平台\n\n/register - 注册你的私信bot\n/unregister <id> - 注销你的bot\n\n管理员额外命令：/list /status")
+        await _set_menu_button(msg.chat.id)  # 只在/start时设一次
     elif text == "/register":
         _registering[uid] = uid
         await msg.answer("请发送你的 bot token（从 @BotFather 获取）")
@@ -345,37 +366,30 @@ async def on_platform_private(msg):
         elif text == "/status":
             await msg.answer("📊 平台状态: 子bot {} 个, 运行正常".format(len(_bot_registry)))
 
+
+async def _set_menu_button(chat_id):
     try:
-        await _bot.set_chat_menu_button(MenuButtonCommands(), chat_id=msg.chat.id)
+        await _bot.set_chat_menu_button(MenuButtonCommands(), chat_id=chat_id)
     except Exception:
         pass
 
 
 # ==================== 注册/注销 ====================
 async def register_bot(token, admin_uid):
-    tmp_bot = Bot(token=token)
-    me = await tmp_bot.get_me()
+    bot = Bot(token=token)
+    me = await bot.get_me()
     bot_id = me.id
     if bot_id in _bot_registry:
-        await tmp_bot.close()
+        await bot.close()
         raise ValueError("bot已存在: " + str(bot_id))
     info = make_bot(bot_id, token, [admin_uid], me.username or "")
     info["tasks"].append(asyncio.create_task(_start_bot(bot_id)))
     _persist_registry()
-    await tmp_bot.close()
     return info
 
 
 async def _start_bot(bot_id):
     info = _bot_registry[bot_id]
-    try:
-        await info["bot"].set_my_commands([
-            BotCommand("ban", "屏蔽用户"), BotCommand("unblock", "解除屏蔽"),
-            BotCommand("user", "查看用户"), BotCommand("lock", "锁定回复"),
-            BotCommand("replyoff", "取消锁定"), BotCommand("help", "命令列表"),
-        ])
-    except Exception:
-        pass
     await info["dp"].start_polling(info["bot"])
 
 

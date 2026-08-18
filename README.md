@@ -48,7 +48,42 @@ pm_platform/
 └── bot_data/          # 各子 bot 的验证/屏蔽/锁定数据（自动生成）
 ```
 
-## 部署
+## Docker 部署
+
+### 快速启动
+
+```bash
+docker run -d \
+  --name pm-platform \
+  -e PM_TOKEN=你的token \
+  -e PM_ADMIN=你的UID \
+  -v $(pwd)/data:/data \
+  --restart unless-stopped \
+  ghcr.io/febfengt/pm-platform
+```
+
+### Docker Compose（推荐）
+
+```bash
+cp .env.example .env
+# 编辑 .env 填入你的 token 和 UID
+docker compose up -d
+```
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `PM_TOKEN` | 平台 Bot Token（必填） | `YOUR_TOKEN_HERE` |
+| `PM_ADMIN` | 管理员 UID，逗号分隔 | `7743246793` |
+| `PM_REGISTRY` | 注册表路径 | `/data/bot_registry.json` |
+| `PM_DATA` | 数据目录 | `/data/bot_data` |
+
+数据通过 `-v $(pwd)/data:/data` 持久化到本地。
+
+---
+
+## 一键安装
 
 ### 1. 安装依赖
 

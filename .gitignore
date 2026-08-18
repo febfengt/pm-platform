@@ -4,3 +4,4 @@ bot_registry.json
 bot_data/
 logs/
 *.log
+.env
