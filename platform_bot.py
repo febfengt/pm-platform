@@ -41,7 +41,7 @@ def _save(bot_id, name, data):
         json.dump(data, open(os.path.join(d, name + ".json"), "w"), ensure_ascii=False)
 
 
-def is_verified(bot_id, uid): return uid in _bot_data(bot_id, "verified")
+def is_verified(bot_id, uid): return str(uid) in _bot_data(bot_id, "verified")
 def set_verified(bot_id, uid, v):
     d = _bot_data(bot_id, "verified"); d[str(uid)] = v; _save(bot_id, "verified", d)
 
