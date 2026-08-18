@@ -131,18 +131,20 @@ async def _forward_to_admin(bot_id, bot, msg):
 
 async def _issue_verify(bot_id, bot, msg):
     import datetime as _dt
-    h = _dt.datetime.now().hour % 12
-    if h == 0:
-        h = 12
+    h = _dt.datetime.now().hour
     vt = _verify_times.setdefault(bot_id, {})
     vt[str(msg.from_user.id)] = h
-    await msg.answer("👋 你好！请先通过人机验证。\n🕐 当前整点时间是 **{}点**。请回复正确的整点时间。".format(h), parse_mode="HTML")
+    await msg.answer("👋 你好！请先通过人机验证。\n🕐 当前时间(24小时制)是 **{}点**。请回复正确的整点时间。".format(h), parse_mode="HTML")
 
 
 async def _handle_admin_cmd(bot_id, bot, msg):
     text = msg.text or ""
     chat_id = str(msg.chat.id)
     cur_uid = _current_reply.get(bot_id, {}).get(chat_id)
+
+    if text == "/start":
+        await msg.answer("🤖 你的私信Bot已就绪！\n\n发送 /help 查看命令列表。")
+        return
 
     def _reply(s): bot.send_message(chat_id, s)
 
@@ -215,8 +217,11 @@ async def _handle_private(bot_id, bot, msg):
         if msg.text:
             txt = msg.text.strip()
             is_correct = (txt == str(verify_hour) or
+                          str(verify_hour).zfill(2) == txt or
                           str(verify_hour) + "点" in txt or
-                          str(verify_hour) + ":00" in txt)
+                          str(verify_hour).zfill(2) + "点" in txt or
+                          str(verify_hour) + ":00" in txt or
+                          str(verify_hour).zfill(2) + ":00" in txt)
             if is_correct:
                 set_verified(bot_id, uid, True)
                 vt.pop(uid_str, None)
