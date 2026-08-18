@@ -88,7 +88,7 @@ def _extract_uid(reply_msg):
     if not reply_msg:
         return None
     for part in (reply_msg.text or "").split():
-        if part.isdigit() and len(part) > 5:
+        if part.isdigit() and len(part) > 6:
             return int(part)
     if reply_msg.reply_markup:
         try:
@@ -439,7 +439,6 @@ async def _safe_start_bot(bot_id):
         await _start_bot(bot_id)
     except Exception as e:
         logging.error("子bot {} 启动失败: {}".format(bot_id, e))
-        # 移除坏的子bot
         info = _bot_registry.pop(bot_id, None)
         if info:
             for t in info["tasks"]:
@@ -448,6 +447,7 @@ async def _safe_start_bot(bot_id):
                 await info["bot"].close()
             except Exception:
                 pass
+        _persist_registry()
 
 
 async def main():

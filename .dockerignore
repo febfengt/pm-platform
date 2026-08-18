@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+bot_registry.json
+bot_data/
+logs/
+*.log
+.env
+.DS_Store
+.git/
