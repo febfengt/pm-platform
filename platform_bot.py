@@ -427,6 +427,28 @@ def load_saved_bots():
         except Exception as e:
             logging.warning("加载bot {} 失败: {}".format(bid_str, e))
 
+async def _load_and_start_bots():
+    load_saved_bots()
+    for bid in list(_bot_registry.keys()):
+        info = _bot_registry[bid]
+        info["tasks"].append(asyncio.create_task(_safe_start_bot(bid)))
+        logging.info("后台启动子bot id={}".format(bid))
+
+async def _safe_start_bot(bot_id):
+    try:
+        await _start_bot(bot_id)
+    except Exception as e:
+        logging.error("子bot {} 启动失败: {}".format(bot_id, e))
+        # 移除坏的子bot
+        info = _bot_registry.pop(bot_id, None)
+        if info:
+            for t in info["tasks"]:
+                t.cancel()
+            try:
+                await info["bot"].close()
+            except Exception:
+                pass
+
 
 async def main():
     if not _bot:
@@ -443,17 +465,13 @@ async def main():
     except Exception:
         pass
 
-    load_saved_bots()
-    for bid in list(_bot_registry.keys()):
-        info = _bot_registry[bid]
-        info["tasks"].append(asyncio.create_task(_start_bot(bid)))
-        logging.info("后台启动子bot id={}".format(bid))
+    await _load_and_start_bots()
 
     logging.info("平台Bot 开始polling")
     try:
         await _dp.start_polling(_bot)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.exception("平台Bot 异常退出: " + str(e))
     finally:
         logging.info("关闭所有子bot...")
         for info in _bot_registry.values():
