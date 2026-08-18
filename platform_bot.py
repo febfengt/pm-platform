@@ -318,10 +318,16 @@ async def on_platform_private(msg):
             await msg.answer("❌ 注册失败: " + str(e))
         return
 
+    text = msg.text or ""
+
+    if text == "/start":
+        if uid not in PLATFORM_ADMIN_IDS:
+            await msg.answer("👋 你好！\n\n我是 PM 私信平台。\n\n本平台用于管理私信机器人，\n只有管理员可以使用。\n\n如果你是管理员，请重新发送 /start。")
+            return
+
     if uid not in PLATFORM_ADMIN_IDS:
         return
 
-    text = msg.text or ""
     if text == "/start":
         await msg.answer("🤖 PM 私信平台\n\n/register - 注册新子bot\n/list - 列出所有子bot\n/unregister <id> - 注销\n/status - 平台状态")
     elif text == "/register":
