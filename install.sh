@@ -19,6 +19,28 @@ echo "  https://github.com/febfengt/pm-platform"
 echo "========================================"
 echo ""
 
+# ---------- 0. TTY 检测 ----------
+if [ ! -t 0 ]; then
+    echo -e "${YELLOW}[!]${NC} 检测到管道模式，交互输入不可用。"
+    echo ""
+    echo "  请改用以下两种方式之一："
+    echo ""
+    echo "  方式1 (下载后执行):"
+    echo "    curl -fsSL https://raw.githubusercontent.com/febfengt/pm-platform/main/install.sh -o install.sh"
+    echo "    bash install.sh"
+    echo ""
+    echo "  方式2 (环境变量):"
+    echo "    PM_TOKEN=你的token PM_ADMIN=你的UID bash install.sh"
+    echo "    curl -fsSL URL | PM_TOKEN=xxx PM_ADMIN=yyy bash"
+    echo ""
+    # 如果环境变量提供了就继续
+    if [ -n "${PM_TOKEN:-}" ] && [ -n "${PM_ADMIN:-}" ]; then
+        info "通过环境变量检测到配置，继续安装..."
+    else
+        err ""
+    fi
+fi
+
 # ---------- 1. 依赖检测 ----------
 echo "--- 检查环境 ---"
 for cmd in curl git python3 systemctl; do
@@ -33,13 +55,13 @@ info "Python 标准库 OK"
 python3 -c "import aiogram; print(aiogram.__version__)" &>/dev/null && {
     info "aiogram 已安装 ($(python3 -c 'import aiogram; print(aiogram.__version__)'))"
 } || {
-    warn "安装 aiogram..."
-    if python3 -m pip install aiogram --quiet 2>/dev/null; then
-        info "aiogram 安装成功"
-    elif python3 -m pip install aiogram --break-system-packages --quiet 2>/dev/null; then
-        info "aiogram 安装成功 (break-system-packages)"
+    warn "安装 aiogram>=3.30..."
+    if python3 -m pip install "aiogram>=3.30" --quiet 2>/dev/null; then
+        info "aiogram 安装成功 ($(python3 -c 'import aiogram; print(aiogram.__version__)'))"
+    elif python3 -m pip install "aiogram>=3.30" --break-system-packages --quiet 2>/dev/null; then
+        info "aiogram 安装成功 ($(python3 -c 'import aiogram; print(aiogram.__version__)')) (break-system-packages)"
     else
-        err "aiogram 安装失败，请手动: pip install aiogram"
+        err "aiogram 安装失败，请手动: pip install 'aiogram>=3.30'"
     fi
 }
 
@@ -59,17 +81,24 @@ info "代码已就绪: $install_dir"
 echo ""
 echo "--- 平台配置 ---"
 
-token=""
-if [ -f "$install_dir/config.py" ]; then
+token="${PM_TOKEN:-}"
+if [ -z "$token" ] && [ -f "$install_dir/config.py" ]; then
     token=$(grep -oP 'PLATFORM_BOT_TOKEN\s*=\s*"\K[^"]+' "$install_dir/config.py" 2>/dev/null || true)
 fi
 if [ -z "$token" ] || [ "$token" = "YOUR_TOKEN_HERE" ]; then
-    read -rp "  平台 Bot Token (从 @BotFather 获取): " token
+    if [ -t 0 ]; then
+        read -rp "  平台 Bot Token (从 @BotFather 获取): " token
+    else
+        err "Token 未提供。使用 PM_TOKEN 环境变量或下载脚本后交互输入"
+    fi
     [ -z "$token" ] && err "Token 不能为空"
 fi
 info "Token 已填写 (${token:0:8}...)"
 
-read -rp "  平台管理员 UID (你自己的 Telegram UID，可留空默认 7743246793): " admin_id
+admin_id="${PM_ADMIN:-}"
+if [ -z "$admin_id" ] && [ -t 0 ]; then
+    read -rp "  平台管理员 UID (留空默认 7743246793): " admin_id
+fi
 [ -z "$admin_id" ] && admin_id="7743246793"
 info "管理员 UID: $admin_id"
 
