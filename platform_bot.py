@@ -143,10 +143,8 @@ async def _user_info(bot_id, bot, msg, uid):
         user = await bot.get_chat(uid)
     except Exception:
         user = None
-    await msg.answer(
-        "用户：" + ("@" + user.username if user and user.username else "无") +
-        "\nUID：" + str(uid) +
-        "\n" + ("已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽"))
+    label = "<a href=\"https://t.me/" + user.username + "\">@" + user.username + "</a>" if user and user.username else "无"
+    await msg.answer("用户：" + label + "\nUID：" + str(uid) + "\n" + ("已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽"), parse_mode="HTML")
 
 
 async def _handle_admin_cmd(bot_id, bot, msg):
@@ -261,10 +259,8 @@ async def _handle_callback(bot_id, bot, cb):
     if prev and prev[0] == uid and now - prev[1] < 3:
         taps.pop(chat_id, None)
         try:
-            await cb.message.answer(
-                "用户：" + (user.username or str(user.id)) +
-                "\nUID：" + str(uid) +
-                "\n" + ("已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽"))
+            label = "<a href=\"https://t.me/" + user.username + "\">@" + user.username + "</a>" if user.username else str(uid)
+            await cb.message.answer("用户：" + label + "\nUID：" + str(uid) + "\n" + ("已被屏蔽" if is_blocked(bot_id, uid) else "未被屏蔽"), parse_mode="HTML")
         except Exception:
             pass
         return
