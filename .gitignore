@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+bot/
+logs/
+bot_data/
+bot_registry.json
+*.log
