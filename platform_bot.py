@@ -320,35 +320,35 @@ async def on_platform_private(msg):
 
     text = msg.text or ""
 
+    # --- 所有人可操作 ---
     if text == "/start":
-        if uid not in PLATFORM_ADMIN_IDS:
-            await msg.answer("👋 你好！\n\n我是 PM 私信平台。\n\n本平台用于管理私信机器人，\n只有管理员可以使用。\n\n如果你是管理员，请重新发送 /start。")
-            return
-
-    if uid not in PLATFORM_ADMIN_IDS:
-        return
-
-    if text == "/start":
-        await msg.answer("🤖 PM 私信平台\n\n/register - 注册新子bot\n/list - 列出所有子bot\n/unregister <id> - 注销\n/status - 平台状态")
+        await msg.answer("🤖 PM 私信平台\n\n/register - 注册你的私信bot\n/unregister <id> - 注销你的bot\n\n管理员额外命令：/list /status")
     elif text == "/register":
         _registering[uid] = uid
         await msg.answer("请发送你的 bot token（从 @BotFather 获取）")
-    elif text == "/list":
-        if not _bot_registry:
-            await msg.answer("📋 暂无已注册的子bot")
-            return
-        lines = ["📋 已注册（共 {} 个）:".format(len(_bot_registry))]
-        for bid, info in _bot_registry.items():
-            lines.append("• ID:{} @{} 管理员:{}".format(bid, info["name"], ",".join(str(a) for a in info["admins"])))
-        await msg.answer("\n".join(lines))
     elif text.startswith("/unregister "):
         bid = int(text.split()[1].strip())
-        if await unregister_bot(bid):
-            await msg.answer("✅ 子bot " + str(bid) + " 已注销")
+        info = _bot_registry.get(bid)
+        if info is None:
+            await msg.answer("❌ 找不到 bot id=" + str(bid))
+        elif uid not in info["admins"]:
+            await msg.answer("❌ 你没有权限注销这个 bot")
         else:
-            await msg.answer("❌ 找不到 id=" + str(bid))
-    elif text == "/status":
-        await msg.answer("📊 平台状态: 子bot {} 个, 运行正常".format(len(_bot_registry)))
+            if await unregister_bot(bid):
+                await msg.answer("✅ 子bot " + str(bid) + " 已注销")
+    else:
+        # --- 仅管理员 ---
+        if uid in PLATFORM_ADMIN_IDS:
+            if text == "/list":
+                if not _bot_registry:
+                    await msg.answer("📋 暂无已注册的子bot")
+                    return
+                lines = ["📋 已注册（共 {} 个）:".format(len(_bot_registry))]
+                for bid, info in _bot_registry.items():
+                    lines.append("• ID:{} @{} 管理员:{}".format(bid, info["name"], ",".join(str(a) for a in info["admins"])))
+                await msg.answer("\n".join(lines))
+            elif text == "/status":
+                await msg.answer("📊 平台状态: 子bot {} 个, 运行正常".format(len(_bot_registry)))
 
     try:
         await _bot.set_chat_menu_button(MenuButtonCommands(), chat_id=msg.chat.id)
