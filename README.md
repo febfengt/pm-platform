@@ -4,13 +4,13 @@ Telegram 私信平台 —— 让每个 TG 用户都能拥有自己的私信机�
 
 ## 功能
 
-- 🤖 **平台 Bot**：统一管理平台，支持注册/注销/查看子 bot
-- 📬 **私信转发**：用户私信子 bot → 原样转发给你（文字/语音/图片/视频/文件）
-- ✅ **人机验证**：新用户体验机器人验证按钮，点一次通过
-- 🚫 **屏蔽/解封**：`/ban` `/unblock` 管理访问权限
-- 🔒 **锁定回复**：点按钮或直接回复卡片，直接回复特定用户
-- 👤 **双击查信息**：双击按钮显示用户名/UID/屏蔽状态
-- 📋 **菜单命令**：输入 `/` 显示命令列表
+- **平台 Bot**：统一管理平台，支持注册/注销/查看子 bot
+- **私信转发**：用户私信子 bot → 原样转发给你（文字/语音/图片/视频/文件/表情包）
+- **人机验证**：新用户点一次按钮通过验证
+- **屏蔽/解封**：`/ban` `/unblock` 管理访问权限
+- **锁定回复**：点按钮或直接回复卡片锁定用户
+- **双击查信息**：双击按钮显示用户名/UID/屏蔽状态
+- **持久化**：重启后自动恢复所有子 bot
 
 ## 用户流程
 
@@ -42,15 +42,10 @@ Telegram 私信平台 —— 让每个 TG 用户都能拥有自己的私信机�
 
 ```
 pm_platform/
-├── platform_bot.py   # 平台 Bot（管理注册）
-├── bot_manager.py    # 子 Bot 管理器（动态管理多个子 bot）
-├── config.py         # 平台配置
-├── storage/
-│   ├── store.py      # 持久化存储（每个子 bot 独立）
-│   ├── bot_registry.json  # 子 bot 注册表
-│   └── __init__.py
-├── bot_data/         # 各子 bot 的验证/屏蔽数据
-└── logs/             # 运行日志
+├── platform_bot.py    # 平台 + 所有子 bot 核心逻辑（单文件）
+├── config.py          # 配置
+├── bot_registry.json  # 子 bot 注册表（自动生成）
+└── bot_data/          # 各子 bot 的验证/屏蔽/锁定数据（自动生成）
 ```
 
 ## 部署
@@ -70,7 +65,7 @@ PLATFORM_BOT_TOKEN = "你的平台bot的token"
 PLATFORM_ADMIN_IDS = [你的Telegram UID]
 ```
 
-> 平台 bot 是你自己创建一个专门的 bot（通过 @BotFather），用来管理所有子 bot 的注册。
+> 平台 bot 通过 @BotFather 创建，用来管理所有子 bot 的注册。
 
 ### 3. 启动
 
@@ -78,19 +73,30 @@ PLATFORM_ADMIN_IDS = [你的Telegram UID]
 # 前台测试
 python3 platform_bot.py
 
-# 或 systemd
+# 或 systemd（见 pm-platform.service）
 sudo systemctl enable --now pm-platform
 ```
 
-## 数据持久化
+## systemd 服务
 
-- **子 bot 注册表**：`storage/bot_registry.json`
-- **用户验证/屏蔽**：`bot_data/<bot_id>/*.json`（每个子 bot 独立）
+```ini
+[Unit]
+Description=PM 私信平台
+After=network.target
 
-重启后自动加载已注册的子 bot。
+[Service]
+Type=simple
+WorkingDirectory=/root/pm_platform
+ExecStart=/usr/bin/python3 /root/pm_platform/platform_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## 安全说明
 
-- token 只存在本地，不上传到任何外部服务
+- token 只存在本地，不上传任何外部服务
 - 每个子 bot 的数据完全隔离
 - 平台 bot 只有管理员才能操作，其他用户无法访问
