@@ -57,6 +57,7 @@ def set_blocked(bot_id, uid, b):
 # ========== 子Bot实例 ==========
 _current_reply = {}  # bot_id -> {admin_chat: uid}
 _last_tap = {}
+_verify_times = {}  # bot_id -> {uid: verify_hour}
 _bot_registry = {}   # bot_id -> {name, admins, token, bot, dp, tasks}
 
 
@@ -128,9 +129,14 @@ async def _forward_to_admin(bot_id, bot, msg):
             logging.error("转发失败 admin={} bot={}: {}".format(admin, bot_id, e))
 
 
-async def _issue_verify(bot, msg):
-    kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="✅ 我不是机器人")]], resize_keyboard=True)
-    await msg.answer("👋 你好！请先通过人机验证。\n点击下方按钮即可通过：", reply_markup=kb)
+async def _issue_verify(bot_id, bot, msg):
+    import datetime as _dt
+    h = _dt.datetime.now().hour % 12
+    if h == 0:
+        h = 12
+    vt = _verify_times.setdefault(bot_id, {})
+    vt[str(msg.from_user.id)] = h
+    await msg.answer("👋 你好！请先通过人机验证。\n🕐 当前整点时间是 **{}点**。请回复正确的整点时间。".format(h), parse_mode="HTML")
 
 
 async def _handle_admin_cmd(bot_id, bot, msg):
@@ -200,11 +206,23 @@ async def _handle_private(bot_id, bot, msg):
     if is_blocked(bot_id, uid):
         return await msg.answer("🚫 你已被屏蔽，无法发送私信。")
     if not is_verified(bot_id, uid):
-        if msg.text and "我不是机器人" in msg.text:
-            set_verified(bot_id, uid, True)
-            await msg.answer("✅ 验证通过！你可以开始发送私信了。")
-        else:
-            await _issue_verify(bot, msg)
+        uid_str = str(uid)
+        vt = _verify_times.get(bot_id, {})
+        verify_hour = vt.get(uid_str)
+        if verify_hour is None:
+            await _issue_verify(bot_id, bot, msg)
+            return
+        if msg.text:
+            txt = msg.text.strip()
+            is_correct = (txt == str(verify_hour) or
+                          str(verify_hour) + "点" in txt or
+                          str(verify_hour) + ":00" in txt)
+            if is_correct:
+                set_verified(bot_id, uid, True)
+                vt.pop(uid_str, None)
+                await msg.answer("✅ 验证通过！你可以开始发送私信了。")
+                return
+        await _issue_verify(bot_id, bot, msg)
         return
     if (msg.text or "").strip() == "/start":
         return
