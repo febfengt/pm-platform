@@ -8,7 +8,6 @@ from aiogram.types import (
     BotCommand, InlineKeyboardMarkup, InlineKeyboardButton,
 )
 from storage.store import is_verified, set_verified, is_blocked, set_blocked
-from config import PLATFORM_BOT
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
@@ -278,7 +277,10 @@ async def register_bot(token: str, admin_uid: int, name: str = "") -> BotManager
     _bot_managers[bot_id] = manager
     _persist_registry()
     logging.info("子bot注册成功 id={} @{}".format(bot_id, me.username or "?"))
-    await bot.close()
+    try:
+        await bot.close()
+    except Exception:
+        pass
     return manager
 
 
@@ -320,7 +322,7 @@ async def start_all_bots():
 
 
 # 持久化注册表
-_REG_FILE = os.path.join(os.path.dirname(__file__), "..", "storage", "bot_registry.json")
+_REG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "bot_registry.json")
 
 
 def _load_registry():
