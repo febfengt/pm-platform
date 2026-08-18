@@ -12,7 +12,7 @@ if os.path.exists(_ENV_FILE):
                 os.environ.setdefault(k.strip(), v.strip())
 
 # 平台 Bot Token
-PLATFORM_BOT_TOKEN = os.environ.get("PM_TOKEN", "YOUR_TOKEN_HERE")
+PLATFORM_BOT_TOKEN = os.environ.get("PM_TOKEN", "").strip() or "YOUR_TOKEN_HERE"
 
 # 管理员 UID，逗号分隔多个
 _ADMIN_RAW = os.environ.get("PM_ADMIN", "7743246793")

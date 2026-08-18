@@ -1,0 +1,8 @@
+services:
+  pm-platform:
+    build: .
+    container_name: pm-platform
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
